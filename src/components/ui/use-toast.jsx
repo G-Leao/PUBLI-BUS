@@ -2,7 +2,8 @@
 import { useState, useEffect } from "react";
 
 const TOAST_LIMIT = 20;
-const TOAST_REMOVE_DELAY = 1000000;
+const TOAST_DURATION = 5000;
+const TOAST_REMOVE_DELAY = 300;
 
 const actionTypes = {
   ADD_TOAST: "ADD_TOAST",
@@ -19,6 +20,7 @@ function genId() {
 }
 
 const toastTimeouts = new Map();
+const autoDismissTimeouts = new Map();
 
 const addToRemoveQueue = (toastId) => {
   if (toastTimeouts.has(toastId)) {
@@ -42,6 +44,14 @@ const _clearFromRemoveQueue = (toastId) => {
     clearTimeout(timeout);
     toastTimeouts.delete(toastId);
   }
+};
+
+const scheduleAutoDismiss = (toastId) => {
+  const timeout = setTimeout(() => {
+    autoDismissTimeouts.delete(toastId);
+    dispatch({ type: actionTypes.DISMISS_TOAST, toastId });
+  }, TOAST_DURATION);
+  autoDismissTimeouts.set(toastId, timeout);
 };
 
 export const reducer = (state, action) => {
@@ -104,6 +114,14 @@ const listeners = [];
 let memoryState = { toasts: [] };
 
 function dispatch(action) {
+  if (
+    action.type === actionTypes.DISMISS_TOAST &&
+    action.toastId &&
+    autoDismissTimeouts.has(action.toastId)
+  ) {
+    clearTimeout(autoDismissTimeouts.get(action.toastId));
+    autoDismissTimeouts.delete(action.toastId);
+  }
   memoryState = reducer(memoryState, action);
   listeners.forEach((listener) => {
     listener(memoryState);
@@ -133,6 +151,7 @@ function toast({ ...props }) {
       },
     },
   });
+  scheduleAutoDismiss(id);
 
   return {
     id,
