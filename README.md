@@ -20,6 +20,37 @@ A interface foi desenvolvida priorizando uma experiência visual moderna, utiliz
 
 ---
 
+## Arquitetura
+
+```text
+Frontend
+   ↓
+REST API
+   ↓
+Express
+   ↓
+Prisma
+   ↓
+PostgreSQL
+```
+
+A aplicação é **full-stack**:
+
+| Camada | Tecnologia |
+|--------|-----------|
+| Frontend | React + Vite + Tailwind CSS |
+| API REST | Node.js + Express |
+| ORM | Prisma |
+| Banco de dados | PostgreSQL |
+| Autenticação | JWT + bcryptjs |
+| Validação | Zod |
+| Uploads | Multer + storageService (local dev / Supabase Storage) |
+
+O frontend consome a API através de `src/services/api.js` (cliente HTTP
+centralizado) e o `src/API/localClient.js` atua como adaptador para as telas,
+preservando a gestão de sessão via JWT. LocalStorage é usado apenas para
+token/sessão, preferências e conteúdos locais de referência.
+
 ## Características
 
 * Interface moderna e responsiva
@@ -80,61 +111,96 @@ As animações são utilizadas de forma funcional, evitando excesso de elementos
 ```text
 PUBLI-BUS/
 │
-├── public/
+├── frontend → (raiz do repositório, aplicação React)
+│   ├── src/
+│   │   ├── API/localClient.js      # adaptador de persistência (delega à API)
+│   │   ├── services/api.js         # cliente HTTP centralizado da REST API
+│   │   ├── components/
+│   │   ├── pages/
+│   │   └── ...
+│   ├── index.html
+│   ├── package.json
+│   └── vite.config.js
 │
-├── src/
-│   ├── components/
-│   ├── pages/
-│   ├── assets/
-│   └── ...
+├── backend/
+│   ├── prisma/
+│   │   ├── schema.prisma           # modelos PostgreSQL
+│   │   ├── seed.js                 # dados de desenvolvimento
+│   │   └── migrations/
+│   ├── scripts/
+│   │   ├── dev-db.mjs              # PostgreSQL local sem instalação
+│   │   └── smoke-test.mjs          # suíte de testes da API
+│   ├── src/
+│   │   ├── controllers/
+│   │   ├── routes/
+│   │   ├── services/
+│   │   ├── middlewares/
+│   │   ├── models/ (via Prisma)
+│   │   ├── config/
+│   │   ├── utils/
+│   │   ├── app.js
+│   │   └── server.js
+│   ├── .env.example
+│   └── package.json
 │
 ├── .gitignore
-├── .npmrc
-├── components.json
-├── eslint.config.js
-├── index.html
-├── jsconfig.json
-├── package.json
-├── package-lock.json
-├── postcss.config.js
-├── tailwind.config.js
-└── vite.config.js
+└── README.md
 ```
 
----
+## Instalação (full-stack)
 
-## Instalação
-
-Clone o repositório:
+### 1. Backend
 
 ```bash
-git clone https://github.com/G-Leao/PUBLI-BUS.git
+cd backend
+npm install
+cp .env.example .env
 ```
 
-Entre na pasta:
+Configure o `.env` com a sua `DATABASE_URL` (PostgreSQL).
+
+**Opção A — PostgreSQL já instalado:**
 
 ```bash
-cd PUBLI-BUS
+npm run prisma:generate
+npm run prisma:migrate
+npm run seed
+npm run dev        # API em http://localhost:4000
 ```
 
-Instale as dependências:
+**Opção B — sem PostgreSQL instalado (desenvolvimento):**
+
+```bash
+npm run db:dev:init   # sobe um PostgreSQL real local (embedded) + migrations + seed
+npm run dev           # em outro terminal: API em http://localhost:4000
+```
+
+### 2. Frontend
+
+Em outro terminal, na raiz:
 
 ```bash
 npm install
+npm run dev    # em http://localhost:5173
 ```
 
-Execute o projeto em ambiente de desenvolvimento:
+O Vite redireciona `/api` e `/uploads` para o backend em desenvolvimento
+(proxy configurado em `vite.config.js`). Em produção, defina `VITE_API_URL`
+apontando para a API (ex.: `VITE_API_URL=https://api.publibus.com/api`).
 
-```bash
-npm run dev
-```
-
-Depois acesse o endereço disponibilizado pelo Vite no terminal.
-
-Normalmente:
+### Credenciais de desenvolvimento (seed)
 
 ```text
-http://localhost:5173
+admin@publibus.dev      / admin123      (ADMIN)
+operator@publibus.dev   / operator123   (OPERATOR)
+anunciante@publibus.dev / anunciante123 (ADVERTISER)
+```
+
+### Testes do backend
+
+```bash
+cd backend
+npm run test:smoke    # valida migrations, seed e todos os endpoints principais
 ```
 
 ---
@@ -149,23 +215,30 @@ O Vite é utilizado como ferramenta de desenvolvimento e build da aplicação.
 
 ---
 
-## Funcionalidades planejadas
+## Funcionalidades
 
-* [ ] Sistema de autenticação
-* [ ] Dashboard administrativo
-* [ ] Cadastro de anunciantes
-* [ ] Cadastro de empresas
-* [ ] Cadastro e gerenciamento de ônibus
-* [ ] Gerenciamento de espaços publicitários
-* [ ] Criação e gerenciamento de campanhas
-* [ ] Controle de campanhas ativas
-* [ ] Métricas de publicidade
-* [ ] Relatórios
-* [ ] Upload de materiais publicitários
-* [ ] Sistema de permissões
-* [ ] Integração com banco de dados
-* [ ] API REST
+### Implementadas
+
+* [x] Sistema de autenticação (JWT + bcrypt, register/login/me/forgot/reset)
+* [x] Sistema de permissões (ADMIN / OPERATOR / ADVERTISER)
+* [x] Dashboard administrativo (endpoint com dados reais do banco)
+* [x] Cadastro de anunciantes e empresas (endpoints + telas)
+* [x] Cadastro e gerenciamento de ônibus (endpoints)
+* [x] Gerenciamento de espaços publicitários (endpoints)
+* [x] Criação e gerenciamento de campanhas (endpoints + telas)
+* [x] Controle de campanhas ativas (transições de status)
+* [x] Métricas de publicidade (impressões, por campanha/ônibus/tablet/período)
+* [x] Relatórios (campanhas, campanha, anunciante, com filtros)
+* [x] Upload de materiais publicitários (validação de tipo/tamanho)
+* [x] Integração com banco de dados (Prisma + PostgreSQL)
+* [x] API REST (users, companies, advertisers, buses, spaces, campaigns, media, tablets, metrics, dashboard, reports)
+
+### Planejadas
+
+* [ ] Upload em storage definitivo (a camada `storageService` está preparada para Supabase)
 * [ ] Sistema de pagamentos
+* [ ] Envio real de e-mails (OTP e recuperação de senha)
+* [ ] Deploy do backend
 
 ---
 
@@ -173,7 +246,8 @@ O Vite é utilizado como ferramenta de desenvolvimento e build da aplicação.
 
 **Em desenvolvimento**
 
-O projeto continua sendo desenvolvido e receberá novas funcionalidades, melhorias de arquitetura, animações e aprimoramentos de experiência do usuário.
+O backend está implementado e testado localmente com PostgreSQL. O projeto continua
+recebendo novas funcionalidades, melhorias de arquitetura e integrações.
 
 ---
 
