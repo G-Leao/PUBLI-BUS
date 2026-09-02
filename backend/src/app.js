@@ -13,7 +13,7 @@ import { UPLOADS_DIR } from "./services/storageService.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export const app = express();
-
+app.set("trust proxy", 1);
 // Segurança
 app.use(
   helmet({
