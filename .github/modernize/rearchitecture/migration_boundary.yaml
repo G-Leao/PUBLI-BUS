@@ -1,0 +1,15 @@
+strategy: incremental
+user_intent:
+  cleanup_required: false
+must_rewrite:
+  - src/components/Layout.jsx
+  - src/pages/Profile.jsx
+  - src/pages/Plans.jsx
+  - backend/src/services/authService.js
+copy_as_is:
+  - src/pages/Login.jsx
+  - src/hooks/useCrud.js
+legacy_allowed_to_remain:
+  - src/pages/Settings.jsx
+defer_cleanup:
+  - payment gateway integration

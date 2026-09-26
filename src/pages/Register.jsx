@@ -34,7 +34,7 @@ export default function Register() {
     setLoading(true);
     try {
       const result = await localClient.auth.register({ email, password });
-      setOtpHint(result?.otpCode ? `Código local de verificação: ${result.otpCode}` : "");
+      setOtpHint(result?.devOtp ? `Código local de verificação: ${result.devOtp}` : "");
       setShowOtp(true);
     } catch (err) {
       setError(err.message || "Registration failed");
@@ -59,7 +59,11 @@ export default function Register() {
   const handleResend = async () => {
     setError("");
     try {
-      await localClient.auth.resendOtp(email);
+      const result = await localClient.auth.resendOtp(email);
+      // Solo en modo dev el backend devuelve el código.
+      if (result?.devOtp) {
+        setOtpHint(`Código local de verificação: ${result.devOtp}`);
+      }
       toast({
         title: "Code sent",
         description: "Check your email for the new code.",

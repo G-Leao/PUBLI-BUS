@@ -14,8 +14,6 @@
 import {
   api,
   getStoredUser,
-  getPendingSession,
-  saveSession,
   ApiError,
 } from "@/services/api";
 
@@ -24,7 +22,6 @@ import {
 // ---------------------------------------------------------------------------
 const STORAGE_KEY = "publibus_data";
 const LOCAL_ENTITIES = new Set(["MaintenanceConfig", "HelpVideo"]);
-const DEV_OTP = "123456";
 
 const readLocalData = () => {
   try {
@@ -115,35 +112,19 @@ export const localClient = {
 
   auth: {
     async register({ email, password }) {
-      // O backend cria o usuário real (PostgreSQL) e retorna uma sessão.
-      await api.auth.register({ email, password });
-      // O OTP é simulado em ambiente de desenvolvimento (sem provedor de e-mail).
-      return { otpCode: DEV_OTP };
+      // O backend cria o usuário e devolve { devOtp } só no modo AUTH_DEV_MODE.
+      // A sessão chega apenas após verify-otp (nunca outorgada em el registro).
+      return api.auth.register({ email, password });
     },
 
     async verifyOtp({ email, otpCode }) {
-      if (otpCode !== DEV_OTP) {
-        throw new Error("Código de verificação inválido");
-      }
-      const pending = getPendingSession();
-      if (!pending?.token) {
-        throw new Error(
-          "Sessão de cadastro expirada. Por favor, faça login ou refaça o cadastro.",
-        );
-      }
-      saveSession({ token: pending.token, user: pending.user });
-      const user = pending.user;
-      // Atualiza o perfil a partir da API para garantir dados atualizados.
-      try {
-        return { user: await api.auth.me() };
-      } catch {
-        return { user };
-      }
+      const session = await api.auth.verifyOtp({ email, otpCode });
+      return { user: session.user };
     },
 
     async resendOtp(email) {
-      if (!email) throw new Error("Usuário não encontrado");
-      return { otpCode: DEV_OTP };
+      if (!email) throw new Error("E-mail obrigatório");
+      return api.auth.resendOtp({ email });
     },
 
     async loginViaEmailPassword(email, password) {
@@ -153,6 +134,10 @@ export const localClient = {
 
     async me() {
       return api.auth.me();
+    },
+
+    async updateProfile(patch) {
+      return api.auth.updateMe(patch);
     },
 
     logout() {

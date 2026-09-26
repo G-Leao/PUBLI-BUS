@@ -1,0 +1,4 @@
+side_effects: [{effect: load dashboard and resource counts, must_preserve: true}]
+branches: [{condition: advertiser role scoping, must_preserve: true}]
+error_paths: [{contract: API errors surface through loading state, must_preserve: true}]
+concurrency: {model: parallel requests, tx_boundary: none}

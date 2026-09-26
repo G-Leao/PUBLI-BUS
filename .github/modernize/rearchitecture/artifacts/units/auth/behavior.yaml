@@ -1,0 +1,4 @@
+side_effects: [{effect: persist JWT session, must_preserve: true}]
+branches: [{condition: invalid credentials, must_preserve: true}]
+error_paths: [{contract: 401 redirects to login, must_preserve: true}]
+concurrency: {model: request scoped, tx_boundary: none}

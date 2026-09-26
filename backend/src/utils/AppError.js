@@ -1,10 +1,11 @@
 /** Erro operacional com status HTTP e lista opcional de erros de validação. */
 export class AppError extends Error {
-  constructor(message, statusCode = 400, errors = []) {
+  constructor(message, statusCode = 400, errors = [], code = null) {
     super(message);
     this.name = "AppError";
     this.statusCode = statusCode;
     this.errors = errors;
+    this.code = code;
     this.isOperational = true;
     if (Error.captureStackTrace) Error.captureStackTrace(this, this.constructor);
   }

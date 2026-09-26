@@ -25,7 +25,13 @@ export default function Login() {
       await localClient.auth.loginViaEmailPassword(email, password);
       window.location.href = returnTo;
     } catch (err) {
-      setError(err.message || "Invalid email or password");
+      if (err?.status === 403) {
+        setError(
+          "Tu cuenta aún no está verificada. Revisa tu correo y usa el código de verificación.",
+        );
+      } else {
+        setError(err.message || "Invalid email or password");
+      }
     } finally {
       setLoading(false);
     }

@@ -1,0 +1,29 @@
+units:
+  - name: auth
+    source_anchors: [src/pages/Login.jsx, src/lib/AuthContext.jsx, backend/src/routes/authRoutes.js]
+    exported_signature: "JWT session login/logout/current-user"
+    depends_on: [profile]
+  - name: dashboard
+    source_anchors: [src/pages/Home.jsx, backend/src/routes/dashboardRoutes.js]
+    exported_signature: "GET /api/dashboard plus resource lists"
+    depends_on: [auth, advertisers, campaigns, tablets]
+  - name: profile
+    source_anchors: [src/pages/Profile.jsx, backend/src/controllers/authController.js]
+    exported_signature: "GET/PUT /api/auth/me and POST /api/uploads"
+    depends_on: [auth]
+  - name: plans
+    source_anchors: [src/pages/Plans.jsx, src/config/plans.js]
+    exported_signature: "plan catalog and upgrade navigation"
+    depends_on: [auth]
+  - name: advertisers
+    source_anchors: [src/pages/Advertisers.jsx, backend/src/routes/advertiserRoutes.js]
+    exported_signature: "CRUD advertiser"
+    depends_on: [auth, plans]
+  - name: campaigns
+    source_anchors: [src/pages/Campaigns.jsx, backend/src/routes/campaignRoutes.js]
+    exported_signature: "CRUD campaign and media upload"
+    depends_on: [auth, advertisers, plans]
+  - name: tablets
+    source_anchors: [src/pages/Tablets.jsx, backend/src/routes/tabletRoutes.js]
+    exported_signature: "CRUD tablet"
+    depends_on: [auth, plans]

@@ -1,0 +1,5 @@
+flows:
+  - source_loc: src/lib/AuthContext.jsx:6
+    pairing: matched
+    must_preserve: "session user is refreshed after login and profile changes"
+    verification_hint: "navigate between protected pages after updating profile"

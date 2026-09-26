@@ -46,7 +46,13 @@ export async function createUser({ name, email, password, role, companyId }) {
     if (existing) throw new Prisma.PrismaClientKnownRequestError("duplicated", { code: "P2002", clientVersion: "5" });
     const passwordHash = hashPassword(password);
     const user = await tx.user.create({
-      data: { name, email: email.toLowerCase().trim(), passwordHash, role },
+      data: {
+        name,
+        email: email.toLowerCase().trim(),
+        passwordHash,
+        role,
+        emailVerifiedAt: new Date(),
+      },
     });
     if (role === "ADVERTISER") {
       await tx.advertiser.create({ data: { userId: user.id, companyId: companyId || null } });

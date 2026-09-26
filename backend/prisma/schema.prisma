@@ -13,6 +13,17 @@ enum UserRole {
   ADVERTISER
 }
 
+enum PlanType {
+  FREE
+  PLUS
+  PRO
+}
+
+enum AuthCodePurpose {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
 enum BusStatus {
   ACTIVE
   MAINTENANCE
@@ -41,15 +52,34 @@ enum TabletStatus {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         UserRole @default(ADVERTISER)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String        @id @default(uuid())
+  name            String
+  email           String        @unique
+  passwordHash    String
+  role            UserRole      @default(ADVERTISER)
+  plan            PlanType      @default(FREE)
+  avatarUrl       String?
+  emailVerifiedAt DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   advertiser Advertiser?
+  authCodes  AuthCode[]
+}
+
+model AuthCode {
+  id        String           @id @default(uuid())
+  userId    String
+  purpose   AuthCodePurpose
+  codeHash  String
+  expiresAt DateTime
+  usedAt    DateTime?
+  attempts  Int              @default(0)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
 }
 
 model Company {

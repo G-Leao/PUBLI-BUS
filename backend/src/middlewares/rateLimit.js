@@ -22,3 +22,15 @@ export const authLimiter = rateLimit({
     message: "Muitas tentativas de autenticação. Tente novamente em 15 minutos.",
   },
 });
+
+// Rate limit dedicado a la verificación de OTP (anti fuerza bruta de códigos).
+export const otpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: env.RATE_LIMIT_OTP_MAX,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Muitas tentativas de verificação. Tente novamente em 15 minutos.",
+  },
+});

@@ -20,6 +20,7 @@ import Register from "@/pages/Register";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import Player from "@/pages/Player";
+import Profile from "@/pages/Profile";
 import { ThemeProvider } from "next-themes";
 import { Navigate } from "react-router-dom";
 
@@ -62,6 +63,7 @@ const AuthenticatedApp = () => {
           <Route path="/tablets" element={<Tablets />} />
           <Route path="/central-ajuda" element={<HelpCenter />} />
           <Route path="/configuracoes" element={<SettingsPage />} />
+          <Route path="/perfil" element={<Profile />} />
         </Route>
         <Route path="/player" element={<Player />} />
       </Route>

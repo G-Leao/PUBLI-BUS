@@ -20,6 +20,17 @@ const envSchema = z.object({
   SUPABASE_BUCKET: z.string().optional(),
   RATE_LIMIT_MAX: z.coerce.number().default(300),
   RATE_LIMIT_AUTH_MAX: z.coerce.number().default(20),
+  RATE_LIMIT_OTP_MAX: z.coerce.number().default(10),
+  // AUTH_DEV_MODE: em dev devolve devOtp/devResetLink nas respuestas.
+  // Default: true em development/test, false em production.
+  AUTH_DEV_MODE: z
+    .preprocess(
+      (v) =>
+        v === undefined || v === ""
+          ? undefined
+          : String(v).toLowerCase() === "true" || String(v) === "1",
+      z.boolean().optional(),
+    ),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -35,3 +46,15 @@ if (!parsed.success) {
 export const env = parsed.data;
 
 export const isProduction = env.NODE_ENV === "production";
+
+/**
+ * Controla el modo dev/prod de autenticación leyendo AUTH_DEV_MODE en tiempo
+ * de llamada (permite alternarlo en tests). Default: dev fuera de producción.
+ */
+export function isAuthDevMode() {
+  const raw = process.env.AUTH_DEV_MODE;
+  if (raw !== undefined && raw !== "") {
+    return String(raw).toLowerCase() === "true" || String(raw) === "1";
+  }
+  return !isProduction;
+}

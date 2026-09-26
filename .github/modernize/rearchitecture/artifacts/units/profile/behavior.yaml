@@ -1,0 +1,4 @@
+side_effects: [{effect: persist name/avatar URL, must_preserve: true}]
+branches: [{condition: validate image type and size, must_preserve: true}]
+error_paths: [{contract: upload/API error is shown as toast, must_preserve: true}]
+concurrency: {model: request scoped, tx_boundary: none}

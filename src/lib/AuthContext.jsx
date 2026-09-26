@@ -29,6 +29,11 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
+  // Actualiza el estado de sesión sin hacer logout (ej.: tras editar el perfil).
+  const updateUser = useCallback((nextUser) => {
+    setUser(nextUser);
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -39,6 +44,7 @@ export function AuthProvider({ children }) {
         authError: null,
         authChecked,
         logout,
+        updateUser,
         navigateToLogin: () => {},
         checkUserAuth,
         checkAppState: async () => {},

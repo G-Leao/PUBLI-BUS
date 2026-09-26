@@ -1,0 +1,10 @@
+contracts:
+  - source_loc: backend/src/routes/authRoutes.js:40
+    stability: frozen
+    target_contract: "PUT /api/auth/me accepts name and nullable avatarUrl; returns {data:{user}}"
+  - source_loc: backend/src/routes/uploadsRoutes.js:15
+    stability: frozen
+    target_contract: "POST /api/uploads multipart field file; returns {data:{fileUrl}}"
+  - source_loc: backend/src/services/advertiserService.js:98
+    stability: frozen
+    target_contract: "resource limit violations return HTTP 409 with a user-facing message"

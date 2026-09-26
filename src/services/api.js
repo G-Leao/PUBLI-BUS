@@ -329,6 +329,8 @@ function normalizeSessionUser(user) {
     name: user.name,
     email: user.email,
     role: user.role,
+    plan: user.plan || "FREE",
+    avatarUrl: user.avatarUrl || null,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
     advertiser_id: advertiser.id || null,
@@ -347,9 +349,29 @@ export const api = {
         method: "POST",
         body: { name: name || String(email).split("@")[0], email, password },
       });
-      const { token, user } = res.data;
-      savePendingSession({ token, user: normalizeSessionUser(user) });
+      // Em modo dev devolve { user, devOtp }; em prod só { user }.
+      // A sessão real chega apenas após verify-otp.
       return res.data;
+    },
+    async verifyOtp({ email, otpCode }) {
+      const res = await request("/auth/verify-otp", {
+        method: "POST",
+        body: { email, otpCode },
+        auth: false,
+      });
+      saveSession({
+        token: res.data.token,
+        user: normalizeSessionUser(res.data.user),
+      });
+      return res.data;
+    },
+    async resendOtp({ email }) {
+      const res = await request("/auth/resend-otp", {
+        method: "POST",
+        body: { email },
+        auth: false,
+      });
+      return res.data || {};
     },
     async login({ email, password }) {
       const res = await request("/auth/login", {
@@ -367,6 +389,12 @@ export const api = {
     },
     async me() {
       const res = await request("/auth/me");
+      const user = normalizeSessionUser(res.data.user);
+      setStoredUser(user);
+      return user;
+    },
+    async updateMe(patch) {
+      const res = await request("/auth/me", { method: "PATCH", body: patch });
       const user = normalizeSessionUser(res.data.user);
       setStoredUser(user);
       return user;

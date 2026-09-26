@@ -1,0 +1,4 @@
+side_effects: [{effect: CRUD advertiser through REST, must_preserve: true}]
+branches: [{condition: plan limit reached, must_preserve: true}]
+error_paths: [{contract: backend 409 blocks creation, must_preserve: true}]
+concurrency: {model: request scoped, tx_boundary: transaction in service}

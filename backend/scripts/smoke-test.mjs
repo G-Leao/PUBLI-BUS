@@ -94,6 +94,10 @@ async function main() {
   process.env.JWT_SECRET = "smoke-test-secret-0123456789abcdef";
   process.env.NODE_ENV = "test";
   process.env.API_URL = "http://127.0.0.1:4001";
+  // Presupuesto de rate-limit alto para que los tests funcionales no sufran 429
+  // por acumular llamadas en la misma ventana (los límites reales siguen bajos).
+  process.env.RATE_LIMIT_AUTH_MAX = "30";
+  process.env.RATE_LIMIT_OTP_MAX = "30";
 
   const { default: app } = await import(
     pathToFileURL(path.join(backendDir, "src", "app.js")).href
@@ -102,6 +106,11 @@ async function main() {
     server = app.listen(4001, resolve);
   });
   baseUrl = "http://127.0.0.1:4001/api";
+
+  // Mismo client Prisma que usa la API (mismo proceso): permite expirar códigos.
+  const { prisma } = await import(
+    pathToFileURL(path.join(backendDir, "src", "utils", "prisma.js")).href
+  );
 
   // ------------------------------------------------------------------
   console.log("\n1) Health check");
@@ -345,8 +354,13 @@ async function main() {
   const forgot = await api("POST", "/auth/forgot-password", {
     body: { email: "smoke@test.dev" },
   });
-  check("forgot-password retorna resetToken (dev)", forgot.status === 200 && forgot.body?.data?.resetToken);
-  const resetToken = forgot.body?.data?.resetToken;
+  check(
+    "forgot-password (dev) devolve devResetLink e NUNCA resetToken",
+    forgot.status === 200 &&
+      typeof forgot.body?.data?.devResetLink === "string" &&
+      !("resetToken" in forgot.body.data),
+  );
+  const resetToken = new URL(forgot.body.data.devResetLink).searchParams.get("token");
   const reset = await api("POST", "/auth/reset-password", {
     body: { token: resetToken, newPassword: "novaSenha123" },
   });
@@ -355,6 +369,49 @@ async function main() {
     body: { email: "smoke@test.dev", password: "novaSenha123" },
   });
   check("Login com nova senha", relogin.status === 200);
+
+  const reuseToken = await api("POST", "/auth/reset-password", {
+    body: { token: resetToken, newPassword: "outraSenha456" },
+  });
+  check("Reset token reusado → 400 (uso único)", reuseToken.status === 400);
+
+  const badToken = await api("POST", "/auth/reset-password", {
+    body: { token: "token-invalido-abc", newPassword: "outraSenha456" },
+  });
+  check("Reset token inválido → 400", badToken.status === 400);
+
+  const shortPass = await api("POST", "/auth/reset-password", {
+    body: { token: resetToken, newPassword: "123" },
+  });
+  check("Nova senha demasiado curta → 422", shortPass.status === 422);
+
+  const forgot2 = await api("POST", "/auth/forgot-password", {
+    body: { email: "smoke@test.dev" },
+  });
+  const resetToken2 = new URL(forgot2.body.data.devResetLink).searchParams.get("token");
+  await prisma.authCode.updateMany({
+    where: {
+      purpose: "PASSWORD_RESET",
+      user: { is: { email: "smoke@test.dev" } },
+      usedAt: null,
+    },
+    data: { expiresAt: new Date(Date.now() - 1000) },
+  });
+  const expiredReset = await api("POST", "/auth/reset-password", {
+    body: { token: resetToken2, newPassword: "outraSenha456" },
+  });
+  check("Reset token expirado → 400", expiredReset.status === 400);
+
+  const notExists = await api("POST", "/auth/forgot-password", {
+    body: { email: "noexiste@test.dev" },
+  });
+  check(
+    "forgot-password email inexistente → 200 sem vazamento",
+    notExists.status === 200 &&
+      notExists.body?.data &&
+      !("devResetLink" in notExists.body.data) &&
+      !JSON.stringify(notExists.body).includes("token"),
+  );
 
   // ------------------------------------------------------------------
   console.log("\n10) Upload de mídia (multipart)");
@@ -400,7 +457,277 @@ async function main() {
   check("Upload de tipo inválido → 400", badUpload.status === 400);
 
   // ------------------------------------------------------------------
-  console.log(`\n${"=".repeat(46)}`);
+  console.log("\n11) Perfil (PATCH /auth/me)");
+  const meBefore = await api("GET", "/auth/me", { token: adminToken });
+  const adminUserId = meBefore.body?.data?.user?.id;
+
+  const patchMe = await api("PATCH", "/auth/me", {
+    token: adminToken,
+    body: {
+      name: "Admin Smoke Perfil",
+      avatarUrl: "https://cdn.example.com/avatar-smoke.png",
+    },
+  });
+  check(
+    "PATCH /auth/me atualiza nome + avatar",
+    patchMe.status === 200 &&
+      patchMe.body?.data?.user?.name === "Admin Smoke Perfil" &&
+      patchMe.body?.data?.user?.avatarUrl === "https://cdn.example.com/avatar-smoke.png",
+  );
+
+  const meAfter = await api("GET", "/auth/me", { token: adminToken });
+  check(
+    "Perfil persistido + plan exposto (default FREE)",
+    meAfter.body?.data?.user?.name === "Admin Smoke Perfil" &&
+      meAfter.body?.data?.user?.avatarUrl === "https://cdn.example.com/avatar-smoke.png" &&
+      meAfter.body?.data?.user?.plan === "FREE",
+  );
+
+  const patchNoAuth = await api("PATCH", "/auth/me", { body: { name: "X Y" } });
+  check("PATCH /auth/me sem token → 401", patchNoAuth.status === 401);
+
+  const patchShortName = await api("PATCH", "/auth/me", {
+    token: adminToken,
+    body: { name: "A" },
+  });
+  check("PATCH /auth/me nome curto → 422", patchShortName.status === 422);
+
+  const patchBadUrl = await api("PATCH", "/auth/me", {
+    token: adminToken,
+    body: { avatarUrl: "no-es-una-url" },
+  });
+  check("PATCH /auth/me avatarUrl inválido → 422", patchBadUrl.status === 422);
+
+  // Campos administrativos enviados no body são ignorados (whitelist no service).
+  const patchPrivileged = await api("PATCH", "/auth/me", {
+    token: adminToken,
+    body: {
+      name: "Admin Smoke Perfil 2",
+      role: "OPERATOR",
+      plan: "PRO",
+      email: "hacked@publibus.dev",
+      id: meBefore.body?.data?.user?.id,
+    },
+  });
+  check(
+    "PATCH /auth/me ignora role/plan/email/id",
+    patchPrivileged.status === 200 &&
+      patchPrivileged.body?.data?.user?.role === "ADMIN" &&
+      patchPrivileged.body?.data?.user?.plan === "FREE" &&
+      patchPrivileged.body?.data?.user?.email === "admin@publibus.dev" &&
+      patchPrivileged.body?.data?.user?.id === adminUserId &&
+      patchPrivileged.body?.data?.user?.name === "Admin Smoke Perfil 2",
+  );
+
+  // Lo que se altera es SIEMPRE el propio usuario del JWT, nunca el id del body.
+  const otherUserPatch = await api("PATCH", "/auth/me", {
+    token: advertiserToken,
+    body: { id: adminUserId, name: "Nome do anunciante" },
+  });
+  check(
+    "Id ajeno no body é ignorado (altera só o próprio)",
+    otherUserPatch.status === 200 &&
+      otherUserPatch.body?.data?.user?.id !== adminUserId &&
+      otherUserPatch.body?.data?.user?.name === "Nome do anunciante",
+  );
+
+  // Token válido de um usuário inexistente → 401 (authMiddleware re-consulta a BD).
+  const { default: jwt } = await import("jsonwebtoken");
+  const ghostToken = jwt.sign(
+    { sub: "00000000-0000-0000-0000-000000000000", role: "ADMIN" },
+    "smoke-test-secret-0123456789abcdef",
+    { expiresIn: "5m" },
+  );
+  const patchGhost = await api("PATCH", "/auth/me", {
+    token: ghostToken,
+    body: { name: "Ghost" },
+  });
+  check("PATCH /auth/me usuário inexistente → 401", patchGhost.status === 401);
+
+  const meFinal = await api("GET", "/auth/me", { token: adminToken });
+  check(
+    "Nome + avatar finais persistidos",
+    meFinal.body?.data?.user?.name === "Admin Smoke Perfil 2" &&
+      meFinal.body?.data?.user?.avatarUrl === "https://cdn.example.com/avatar-smoke.png",
+  );
+
+  // ------------------------------------------------------------------
+  console.log("\n12) Registro + OTP (modo dev)");
+  const regValidation = await api("POST", "/auth/register", {
+    body: { name: "X", email: "nuevo@test.dev", password: "123" },
+  });
+  check("Registro senha curta → 422", regValidation.status === 422);
+
+  const reg1 = await api("POST", "/auth/register", {
+    body: { name: "Usuario Nuevo", email: "nuevo@test.dev", password: "claveSegura123" },
+  });
+  check(
+    "Registro dev devolve devOtp (6 dígitos) e NUNCA token",
+    reg1.status === 201 &&
+      typeof reg1.body?.data?.devOtp === "string" &&
+      reg1.body.data.devOtp.length === 6 &&
+      !reg1.body.data.token,
+  );
+  const otp1 = reg1.body.data.devOtp;
+
+  const loginPend = await api("POST", "/auth/login", {
+    body: { email: "nuevo@test.dev", password: "claveSegura123" },
+  });
+  check(
+    "Login antes de verificar → 403 EMAIL_NOT_VERIFIED",
+    loginPend.status === 403 && loginPend.body?.code === "EMAIL_NOT_VERIFIED",
+  );
+
+  const badOtp = await api("POST", "/auth/verify-otp", {
+    body: { email: "nuevo@test.dev", otpCode: "000000" },
+  });
+  check("OTP inválido → 401", badOtp.status === 401);
+
+  const verifyOk = await api("POST", "/auth/verify-otp", {
+    body: { email: "nuevo@test.dev", otpCode: otp1 },
+  });
+  check(
+    "OTP válido → sessão (token + user)",
+    verifyOk.status === 200 &&
+      Boolean(verifyOk.body?.data?.token) &&
+      verifyOk.body?.data?.user?.email === "nuevo@test.dev",
+  );
+
+  const verifyReuse = await api("POST", "/auth/verify-otp", {
+    body: { email: "nuevo@test.dev", otpCode: otp1 },
+  });
+  check("OTP reutilizado → 401 (uso único)", verifyReuse.status === 401);
+
+  const loginVerified = await api("POST", "/auth/login", {
+    body: { email: "nuevo@test.dev", password: "claveSegura123" },
+  });
+  check("Login após verificação → 200", loginVerified.status === 200);
+
+  // Tentativas excessivas invalidam o código
+  const reg2 = await api("POST", "/auth/register", {
+    body: { name: "Usuario Dos", email: "dos@test.dev", password: "claveSegura123" },
+  });
+  const otp2 = reg2.body.data.devOtp;
+  for (let i = 0; i < 5; i += 1) {
+    await api("POST", "/auth/verify-otp", {
+      body: { email: "dos@test.dev", otpCode: "111111" },
+    });
+  }
+  const blocked = await api("POST", "/auth/verify-otp", {
+    body: { email: "dos@test.dev", otpCode: otp2 },
+  });
+  check("Máx. tentativas → OTP correto deixa de valer", blocked.status === 401);
+
+  // OTP não é universal
+  const reg3 = await api("POST", "/auth/register", {
+    body: { name: "Usuario Uno", email: "uno@test.dev", password: "claveSegura123" },
+  });
+  const otp3 = reg3.body.data.devOtp;
+  const crossOtp = await api("POST", "/auth/verify-otp", {
+    body: { email: "dos@test.dev", otpCode: otp3 },
+  });
+  check("OTP de outro usuário não funciona", crossOtp.status === 401);
+
+  // OTP expirado
+  const reg4 = await api("POST", "/auth/register", {
+    body: { name: "Usuario Cuatro", email: "cuatro@test.dev", password: "claveSegura123" },
+  });
+  const otp4 = reg4.body.data.devOtp;
+  await prisma.authCode.updateMany({
+    where: {
+      purpose: "EMAIL_VERIFICATION",
+      user: { is: { email: "cuatro@test.dev" } },
+      usedAt: null,
+    },
+    data: { expiresAt: new Date(Date.now() - 1000) },
+  });
+  const expiredOtp = await api("POST", "/auth/verify-otp", {
+    body: { email: "cuatro@test.dev", otpCode: otp4 },
+  });
+  check("OTP expirado → 401", expiredOtp.status === 401);
+
+  // Resend invalida o OTP anterior
+  const reg5 = await api("POST", "/auth/register", {
+    body: { name: "Usuario Cinco", email: "cinco@test.dev", password: "claveSegura123" },
+  });
+  const otp5 = reg5.body.data.devOtp;
+  const resend = await api("POST", "/auth/resend-otp", {
+    body: { email: "cinco@test.dev" },
+  });
+  check(
+    "Resend OTP (dev) devolve novo devOtp",
+    resend.status === 200 && typeof resend.body?.data?.devOtp === "string",
+  );
+  const oldOtpAfterResend = await api("POST", "/auth/verify-otp", {
+    body: { email: "cinco@test.dev", otpCode: otp5 },
+  });
+  check("OTP anterior invalidado após resend → 401", oldOtpAfterResend.status === 401);
+  const newOtpOk = await api("POST", "/auth/verify-otp", {
+    body: { email: "cinco@test.dev", otpCode: resend.body.data.devOtp },
+  });
+  check("Novo OTP após resend funciona", newOtpOk.status === 200);
+
+  // ------------------------------------------------------------------
+  console.log("\n13) Modo produção (AUTH_DEV_MODE=false)");
+  process.env.AUTH_DEV_MODE = "false";
+  const prodReg = await api("POST", "/auth/register", {
+    body: { name: "Prod User", email: "prod@test.dev", password: "claveSegura123" },
+  });
+  check(
+    "Prod: register sem provider → 503 e NUNCA devOtp",
+    prodReg.status === 503 && !JSON.stringify(prodReg.body).includes("devOtp"),
+  );
+
+  const prodForgot = await api("POST", "/auth/forgot-password", {
+    body: { email: "smoke@test.dev" },
+  });
+  check(
+    "Prod: forgot-password sem provider → 503 e NUNCA token/link",
+    prodForgot.status === 503 &&
+      !JSON.stringify(prodForgot.body).includes("resetToken") &&
+      !JSON.stringify(prodForgot.body).includes("devResetLink"),
+  );
+
+  const prodForgotMissing = await api("POST", "/auth/forgot-password", {
+    body: { email: "nadie@test.dev" },
+  });
+  check(
+    "Prod: email inexistente → 200 genérico (sem enumeración)",
+    prodForgotMissing.status === 200 &&
+      !JSON.stringify(prodForgotMissing.body).includes("token"),
+  );
+
+  const prodLogin = await api("POST", "/auth/login", {
+    body: { email: "prod@test.dev", password: "claveSegura123" },
+  });
+  check(
+    "Prod: register falho não deixa usuário órfano (login → 401)",
+    prodLogin.status === 401,
+  );
+  process.env.AUTH_DEV_MODE = "true";
+
+  // ------------------------------------------------------------------
+  console.log("\n14) Rate limit (grupo auth)");
+  let reached429 = false;
+  for (let i = 0; i < 8; i += 1) {
+    const rl = await api("POST", "/auth/forgot-password", {
+      body: { email: `rl${i}@test.dev` },
+    });
+    if (rl.status === 429) reached429 = true;
+  }
+  check("Rate limit auth → 429 alcanzado", reached429);
+
+  const rlHeaders = await fetch(`${baseUrl}/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "rlheaders@test.dev" }),
+  });
+  check(
+    "forgot-password expone headers de rate-limit",
+    rlHeaders.headers?.get?.("ratelimit-policy") ||
+      rlHeaders.headers?.get?.("ratelimit") ||
+      rlHeaders.headers?.get?.("x-ratelimit-limit"),
+  );
   console.log(`Resultado: ${passed} passaram · ${failed} falharam`);
   if (failures.length) {
     console.log("Falhas:", failures.join(", "));

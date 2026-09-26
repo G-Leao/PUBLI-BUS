@@ -18,8 +18,13 @@ export default function ForgotPassword() {
     setLoading(true);
     try {
       const result = await localClient.auth.resetPasswordRequest(email);
-      if (result?.resetToken) {
-        setResetLink(`/reset-password?token=${encodeURIComponent(result.resetToken)}`);
+      if (result?.devResetLink) {
+        try {
+          const url = new URL(result.devResetLink);
+          setResetLink(url.pathname + url.search);
+        } catch {
+          setResetLink(result.devResetLink);
+        }
       }
     } catch {
       // Always show success regardless

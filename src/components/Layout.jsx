@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { Outlet, NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { Avatar } from "@/components/Avatar";
+import { useAuth } from "@/lib/AuthContext";
 import {
   Bus,
   LayoutDashboard,
@@ -9,6 +11,7 @@ import {
   Tablet as TabletIcon,
   HelpCircle,
   Settings as SettingsIcon,
+  CircleUserRound,
   PlayCircle,
   Menu,
   X,
@@ -22,6 +25,7 @@ const navItems = [
   { to: "/tablets", label: "Tablets", icon: TabletIcon },
   { to: "/central-ajuda", label: "Central de Ajuda", icon: HelpCircle },
   { to: "/configuracoes", label: "Configurações", icon: SettingsIcon },
+  { to: "/perfil", label: "Meu perfil", icon: CircleUserRound },
   { to: "/player", label: "Modo Tablet", icon: PlayCircle },
 ];
 
@@ -73,6 +77,7 @@ function SidebarContent({ onNavigate }) {
 export default function Layout() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
+  const { user } = useAuth();
   const current =
     navItems.find((n) => n.to !== "/" && location.pathname.startsWith(n.to)) ||
     navItems.find((n) => n.to === "/");
@@ -111,7 +116,16 @@ export default function Layout() {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600" />
+            <Link
+              to="/perfil"
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+              title="Meu perfil"
+            >
+              <Avatar name={user?.name || ""} src={user?.avatarUrl} size="sm" />
+              <span className="text-sm font-medium hidden sm:inline">
+                {user?.name || ""}
+              </span>
+            </Link>
           </div>
         </header>
         <main className="p-4 lg:p-8 max-w-7xl mx-auto">

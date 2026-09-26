@@ -109,6 +109,7 @@ export async function createAdvertiser({
         email: normalizedEmail,
         passwordHash: hashPassword(finalPassword),
         role: "ADVERTISER",
+        emailVerifiedAt: new Date(),
       },
     });
     const advertiser = await tx.advertiser.create({

@@ -18,6 +18,7 @@ async function main() {
       email: "admin@publibus.dev",
       passwordHash: passwordHash("admin123"),
       role: "ADMIN",
+      emailVerifiedAt: new Date(),
     },
   });
 
@@ -29,6 +30,7 @@ async function main() {
       email: "operator@publibus.dev",
       passwordHash: passwordHash("operator123"),
       role: "OPERATOR",
+      emailVerifiedAt: new Date(),
     },
   });
 
@@ -40,6 +42,7 @@ async function main() {
       email: "anunciante@publibus.dev",
       passwordHash: passwordHash("anunciante123"),
       role: "ADVERTISER",
+      emailVerifiedAt: new Date(),
     },
   });
 

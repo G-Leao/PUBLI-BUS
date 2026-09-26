@@ -1,0 +1,2 @@
+bindings: [{framework: React Router + AuthContext, must_appear_in_target: true}]
+runtime_config: [{name: JWT/API URL, must_appear_in_target: true}]

@@ -1,0 +1,2 @@
+bindings: [{framework: useCrud + localClient, must_appear_in_target: true}]
+runtime_config: [{name: API_URL, must_appear_in_target: true}]

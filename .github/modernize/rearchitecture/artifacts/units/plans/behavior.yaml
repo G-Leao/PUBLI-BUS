@@ -1,0 +1,4 @@
+side_effects: [{effect: route to future upgrade flow, must_preserve: true}]
+branches: [{condition: current plan changes button state, must_preserve: true}]
+error_paths: [{contract: payment is not claimed without backend confirmation, must_preserve: true}]
+concurrency: {model: synchronous navigation, tx_boundary: none}

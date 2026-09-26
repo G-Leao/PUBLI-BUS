@@ -1,0 +1,11 @@
+shared_modules:
+  - source_loc: src/services/api.js:343
+    kind: REST adapter
+    used_by_units: [auth, dashboard, profile, advertisers, campaigns, tablets]
+    fields: [{name: auth, type: object}, {name: uploads, type: object}]
+    migration_strategy: preserve public api facade and extend auth.updateMe
+  - source_loc: src/components/Layout.jsx:73
+    kind: navigation shell
+    used_by_units: [dashboard, profile, plans, advertisers, campaigns, tablets]
+    fields: [{name: user, type: session user}, {name: logout, type: function}]
+    migration_strategy: preserve shell and reuse Avatar/UserMenu behavior
